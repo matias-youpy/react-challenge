@@ -15,7 +15,7 @@ contains three documents:
 | # | Issue | Area | Source | Status |
 |---|-------|------|--------|--------|
 | 01 | [Double-booking race condition](./01-double-booking-race/spec.md) | Server | README #1 | Done |
-| 02 | [Past slots shown as available](./02-past-slots-filtering/spec.md) | Server | README #2 | Not started |
+| 02 | [Past slots shown as available](./02-past-slots-filtering/spec.md) | Server | README #2 | Done |
 | 03 | [Wrong time across timezones](./03-timezone-display/spec.md) | Client | README #3 | Not started |
 | 04 | [Broken optimistic slot update](./04-optimistic-update/spec.md) | Client | Found in review | Not started |
 

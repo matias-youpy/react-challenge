@@ -56,10 +56,12 @@ app.use(express.json());
 
 app.get("/api/slots", (_req: Request, res: Response) => {
   const taken = new Set(bookings.map((b) => b.slotId));
-  // Filter out slots from earlier today using the date prefix
-  const today = new Date().toISOString().slice(0, 10);
+  // Only show slots that start in the future. Compare instants (epoch ms), not
+  // ISO strings — a full datetime string always sorts after a date-only prefix,
+  // which previously let past slots through.
+  const now = Date.now();
   const available = slots
-    .filter((s) => s.startsAt > today)
+    .filter((s) => new Date(s.startsAt).getTime() > now)
     .map((s) => ({ ...s, taken: taken.has(s.id) }));
   res.json({ slots: available });
 });

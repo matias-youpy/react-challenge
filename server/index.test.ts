@@ -15,6 +15,19 @@ test("GET /api/slots returns a list", async () => {
   assert.ok(Array.isArray(body.slots));
 });
 
+test("GET /api/slots never returns slots that start in the past", async () => {
+  const r = await fetch(`${BASE}/api/slots`);
+  assert.equal(r.status, 200);
+  const { slots } = await r.json() as { slots: { id: string; startsAt: string }[] };
+  const now = Date.now();
+  for (const s of slots) {
+    assert.ok(
+      new Date(s.startsAt).getTime() > now,
+      `slot ${s.id} (${s.startsAt}) is not in the future`
+    );
+  }
+});
+
 test("POST /api/bookings on a free slot returns 201", async () => {
   // Find a slot id from the list
   const slotsResp = await fetch(`${BASE}/api/slots`);
