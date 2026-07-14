@@ -37,3 +37,40 @@ test("POST /api/bookings on a free slot returns 201", async () => {
   assert.ok(booking.id);
   assert.equal(booking.slotId, free.id);
 });
+
+test("concurrent POST /api/bookings for the same slot yields one 201, rest 409", async () => {
+  // Find a free slot to race against.
+  const slotsResp = await fetch(`${BASE}/api/slots`);
+  const { slots } = await slotsResp.json() as { slots: { id: string; taken: boolean }[] };
+  const free = slots.find((s) => !s.taken);
+  assert.ok(free, "expected at least one free slot to test against");
+
+  const attempts = 5;
+  const responses = await Promise.all(
+    Array.from({ length: attempts }, (_, i) =>
+      fetch(`${BASE}/api/bookings`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          slotId: free.id,
+          customerName: `Racer ${i}`,
+          customerEmail: `racer${i}@example.com`,
+          customerPhone: "+1 555 0100",
+        }),
+      })
+    )
+  );
+
+  const statuses = responses.map((r) => r.status);
+  const created = statuses.filter((s) => s === 201).length;
+  const conflicts = statuses.filter((s) => s === 409).length;
+
+  assert.equal(created, 1, `expected exactly one 201, got statuses: ${statuses}`);
+  assert.equal(conflicts, attempts - 1, `expected ${attempts - 1} conflicts, got statuses: ${statuses}`);
+
+  // The slot must now be reported as taken.
+  const after = await fetch(`${BASE}/api/slots`);
+  const { slots: afterSlots } = await after.json() as { slots: { id: string; taken: boolean }[] };
+  const target = afterSlots.find((s) => s.id === free.id);
+  if (target) assert.equal(target.taken, true, "slot should be taken after booking");
+});

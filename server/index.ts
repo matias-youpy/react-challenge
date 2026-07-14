@@ -29,6 +29,9 @@ type Booking = {
 
 const slots: Slot[] = generateSlots();
 const bookings: Booking[] = [];
+// Slot ids claimed synchronously at request time, before the async write
+// completes. This closes the check-then-act window that allowed double booking.
+const reserved = new Set<string>();
 
 function generateSlots(): Slot[] {
   // 24 slots, one per hour starting today 00:00 UTC
@@ -73,24 +76,33 @@ app.post("/api/bookings", (req: Request, res: Response) => {
   const slot = slots.find((s) => s.id === slotId);
   if (!slot) return res.status(404).json({ error: "slot not found" });
 
-  // Is it already taken?
-  const alreadyBooked = bookings.some((b) => b.slotId === slotId);
+  // Claim the slot synchronously so concurrent requests can't both pass this
+  // gate before the async write below runs. The read and the write happen in the
+  // same event-loop tick, so no other request can interleave.
+  const alreadyBooked = reserved.has(slotId) || bookings.some((b) => b.slotId === slotId);
   if (alreadyBooked) {
     return res.status(409).json({ error: "slot already booked" });
   }
+  reserved.add(slotId);
 
   // Simulate the latency of writing to a database
   setTimeout(() => {
-    const booking: Booking = {
-      id: "b" + (bookings.length + 1),
-      slotId,
-      customerName: customerName ?? "",
-      customerEmail,
-      customerPhone: customerPhone ?? "",
-      createdAt: new Date().toISOString(),
-    };
-    bookings.push(booking);
-    res.status(201).json(booking);
+    try {
+      const booking: Booking = {
+        id: "b" + (bookings.length + 1),
+        slotId,
+        customerName: customerName ?? "",
+        customerEmail,
+        customerPhone: customerPhone ?? "",
+        createdAt: new Date().toISOString(),
+      };
+      bookings.push(booking);
+      res.status(201).json(booking);
+    } catch (err) {
+      // Release the reservation so the slot stays bookable if the write fails.
+      reserved.delete(slotId);
+      res.status(500).json({ error: "failed to save booking" });
+    }
   }, 200);
 });
 
